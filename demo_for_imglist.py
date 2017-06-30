@@ -177,7 +177,8 @@ def demo_net(predictor, dataset, image_set,
             im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
             cv2.imwrite(result_file, im)
 
-    assert len(all_boxes) == num_images, 'calculations not complete'
+    print("num of images: detection:{}, gt:{}".format(len(all_boxes[0]), num_images))
+    #assert len(all_boxes) == num_images, 'calculations not complete'
 
     # save results
     cache_folder = os.path.join(root_path, 'cache')

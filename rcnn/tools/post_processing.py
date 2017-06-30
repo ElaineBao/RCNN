@@ -16,9 +16,12 @@ from rcnn.processing.nms import py_nms_wrapper, cpu_nms_wrapper, gpu_nms_wrapper
 from rcnn.processing.box_voting import py_box_voting_wrapper
 
 
-def post_processing(pklfileIn, pklfileOut, dataset, image_set, root_path, dataset_path,
+def post_processing(pklfileIn, pklfileOut, dataset, image_set, root_path, dataset_path, thresh = 1e-2,
                     _use_nms=False, _use_box_voting=False):
     imdb = eval(dataset)(image_set, root_path, dataset_path)
+    num_classes = imdb.num_classes
+    num_images = imdb.num_images
+    print("imdb: num of classes:{}, num of images:{}".format(num_classes, num_images))
     if _use_nms:
         nms = py_nms_wrapper(config.TEST.NMS)
     if _use_box_voting:
@@ -30,14 +33,15 @@ def post_processing(pklfileIn, pklfileOut, dataset, image_set, root_path, datase
     for detfile in pklfileIn:
         with open(detfile.strip(), 'r') as f:
             rec = cPickle.load(f)
+            assert len(rec) == num_classes, "num of classes in {}:{} != imdb.num_classes: {}".format(detfile.strip(), len(rec), num_classes)
+            assert len(rec[0]) == num_images, "num of images in {}:{} != imdb.num_classes: {}".format(detfile.strip(), len(rec[0]), num_images)
             recs.append(rec)
-    num_classes = imdb.num_classes
-    num_images = imdb.num_images
     all_boxes = recs[0]
 
     # stack det result from different models
     for rec_idx in xrange(1, len(recs)):
         rec_per_model = recs[rec_idx]
+        print("num_cls:{},num_imgs:{}".format(len(rec_per_model), len(rec_per_model[0])))
         for cls_idx in xrange(num_classes):
             for img_idx in xrange(num_images):
                 print("processing {}-th file:{} {}".format(rec_idx,cls_idx, img_idx))
@@ -56,6 +60,8 @@ def post_processing(pklfileIn, pklfileOut, dataset, image_set, root_path, datase
             cls_dets = all_boxes[j][i]
             if cls_dets.size == 0:
                 continue
+            indexes = np.where(cls_dets[:,-1] > thresh)[0]
+            cls_dets = cls_dets[indexes, :]
             if _use_nms:
                 keep = nms(cls_dets)
                 if _use_box_voting:
@@ -69,11 +75,12 @@ def post_processing(pklfileIn, pklfileOut, dataset, image_set, root_path, datase
                     all_boxes[j][i] = box_voting(cls_dets)
                 # else: do nothing
 
-    det_file = os.path.join(imdb.cache_path, pklfileOut)
-    with open(det_file, 'wb') as f:
+    print("saving all_boxes to : {}".format(pklfileOut))
+    with open(pklfileOut, 'wb') as f:
         cPickle.dump(all_boxes, f, protocol=cPickle.HIGHEST_PROTOCOL)
 
-    imdb.evaluate_detections(all_boxes)
+    if image_set != 'test':
+        imdb.evaluate_detections(all_boxes)
     return all_boxes
 
 
@@ -89,6 +96,7 @@ def parse_args():
     parser.add_argument('--root_path', help='output data folder', default=default.root_path, type=str)
     parser.add_argument('--dataset_path', help='dataset path', default=default.dataset_path, type=str)
     parser.add_argument('--gpu', help='GPU device to test with', default=0, type=int)
+    parser.add_argument('--thresh', help='score thresh to keep', default=1e-3, type=float)
 
     parser.add_argument('--use_nms', help='use nms in fusing models', action='store_true')
     parser.add_argument('--use_box_voting', help='use box voting in fusing models', action='store_true')
@@ -101,7 +109,7 @@ def main():
     ctx = mx.gpu(args.gpu)
     print(args)
     post_processing(args.pklfileIn, args.pklfileOut, args.dataset, args.image_set,
-                    args.root_path, args.dataset_path,
+                    args.root_path, args.dataset_path, args.thresh,
                     args.use_nms, args.use_box_voting)
 
 if __name__ == '__main__':
