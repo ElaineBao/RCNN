@@ -186,6 +186,7 @@ def demo_net(predictor, dataset, image_set,
         os.mkdir(cache_folder)
 
     cache_file = os.path.join(cache_folder, dataset + '_' + image_set + '_detections.pkl')
+    print("save to {}".format(cache_file))
     with open(cache_file, 'wb') as f:
         cPickle.dump(all_boxes, f, cPickle.HIGHEST_PROTOCOL)
 
